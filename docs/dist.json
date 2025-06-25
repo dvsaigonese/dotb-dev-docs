@@ -1,0 +1,1921 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "version": "1.0",
+    "title": "DOTB API",
+    "description": "# Xác thực\n\n**Mô tả:** Nhận thông tin đăng nhập và trả về `access_token` cùng các trường liên quan, dùng token để truy cập vào các endpoint yêu cầu xác thực.\n\n## Bước 1: Đăng nhập để lấy access_token\n\nSinh `access_token` bằng api đăng nhập (`/oauth2/token`) với tên đăng nhập và mật khẩu.\n\n### Ví dụ Request để đăng nhập\n\n```\ncurl -X POST 'https://your-base-url/rest/v11_3/oauth2/token' \\\n--H 'Content-Type: application/json' \\\n--d '{\n  \"grant_type\": \"password\",       // Kiểu grant, luôn là \"password\"\n  \"client_id\": \"dotb\",            // Client ID của ứng dụng, luôn là \"dotb\"\n  \"client_secret\": \"\",            // Client secret, có thể để trống.\n  \"username\": \"dotbedu@dotb.vn\",  // Tên đăng nhập của user.\n  \"password\": \"123456789\",        // Mật khẩu của user.\n  \"platform\": \"base\"              // Nguồn hoặc nền tảng sinh token.\n}'\n```\n\n### Response\n\n```json\n{\n  \"access_token\": \"0a3abbc1-e0a9-4def-bc7f-baecd9b05fa1\",   // Token xác thực\n  \"expires_in\": 3600,                                       // Thời gian token hết hạn (tính bằng giây)\n  \"token_type\": \"bearer\",                                   // Loại token\n  \"scope\": null,                                            // Phạm vi token được cấp, không áp dựng thì null\n  \"refresh_token\": \"50a98d3c-6f45-42a2-86b3-466c7d6a5d36\",  // Refresh token dùng để lấy `access_token` mới.\n  \"refresh_expires_in\": 1209599,                            // Thời gian hết hạn của `refresh_token` (tính bằng giây)\n  \"download_token\": \"0ccfe4ee-41d9-4b1b-b3ab-f0687723eb70\"  // Token phụ dùng cho mục đích tải tài nguyên\n}\n```        \n\n## Bước 2: Thêm header Xác Thực\n\nThêm header `Authorization: Bearer {access_token}` vào các request xử lý dữ liệu và thực hiện gọi các api mà DOTB cung cấp.\n\n```json\ncurl --location --request GET 'https://your-base-url/rest/v11_3/Contacts' \\\n--header 'Authorization: Bearer 0a3abbc1-e0a9-4def-bc7f-baecd9b05fa1'\n```\n\n# Biểu thức bộ lọc (filter)\n\n## Tổng quan\n\nPhần này sẽ nói về biểu thức bộ lọc trong các API liên quan tới List, nhằm hướng dẫn cách sử dụng trường <code>filter</code> hiệu quả hơn.\n\n## Cấu trúc của Bộ Lọc\n\nBộ lọc được biểu diễn dưới dạng một mảng JSON với cấu trúc linh hoạt nhưng tuân theo các quy tắc nhất định. Hiểu rõ cấu trúc này là chìa khóa để tạo các bộ lọc hiệu quả:\n\n### 1. Cấu trúc cơ bản\n\nMột bộ lọc đơn giản nhất có dạng:\n\n```\n\"filter\" : [{\n  \"field_name\": {\n    \"operator\": \"value\"\n  }\n}]\n```\n\nVí dụ: `\"filter\":[{\"name\":{\"$equals\":\"ABC Company\"}}]`\n\n### 2. Cấu trúc nhiều điều kiện\n\nĐể kết hợp nhiều điều kiện:\n\n```\n\"filter\" : [{\n  \"$operator\": [\n    { \"field1\": { ... } },\n    { \"field2\": { ... } }\n  ]\n}]\n```\n\nVí dụ:\n\n```\n\"filter\" : [{\n  \"$and\": [\n    {\"industry\": {\"$equals\": \"Technology\"}},\n    {\"annual_revenue\": {\"$gt\": 1000000}}\n  ]\n}]\n```\n\n### 3. Các thành phần chính\n\n- **Mảng ngoài cùng**: Luôn bắt đầu bằng dấu ngoặc vuông `[]`\n- **Đối tượng điều kiện**: Mỗi điều kiện là một đối tượng JSON trong mảng\n- **Toán tử logic** (`$and`, `$or`, `$not`): Dùng để nhóm các điều kiện\n- **Tên trường**: Khóa đầu tiên trong mỗi điều kiện\n- **Toán tử so sánh**: Đặt trong đối tượng con của trường (`$equals`, `$contains`, ...)\n- **Giá trị**: Có thể là chuỗi, số, boolean, mảng hoặc null\n\n### 4. Cấu trúc lồng nhau\n\nCác điều kiện có thể lồng nhau nhiều cấp:\n\n```\n\"filter\" : [{\n  \"$and\": [\n    {\"field1\": ...},\n    {\n      \"$or\": [\n        {\"field2\": ...},\n        {\"field3\": ...}\n      ]\n    }\n  ]\n}]\n```\n\n### 5. Quy tắc giá trị\n\n- **Chuỗi**: Đặt trong dấu nháy kép `\"value\"`\n- **Số**: Ghi trực tiếp không dấu nháy `1000`\n- **Boolean**: `true` hoặc `false`\n- **Mảng**: `[\"value1\", \"value2\"]`\n- **Giá trị rỗng**: Dùng chuỗi rỗng `\"\"`\n\n### 6. Ví dụ đầy đủ\n\n```\n\"filter\": [{\n  \"$and\": [\n    {\n      \"$or\": [\n        {\"industry\": {\"$in\": [\"Technology\", \"Finance\"]}},\n        {\"annual_revenue\": {\"$gte\": 500000}}\n      ]\n    },\n    {\n      \"date_entered\": {\"$not_empty\": \"\"}\n    }\n  ]\n},\n{\n  \"assigned_user_id\": {\"$in\": [\"seed_will\", \"seed_sarah\"]}\n}]\n```\n\nCấu trúc này nghĩa là:  \n(Ngành là Technology HOẶC Finance HOẶC Doanh thu ≥ $500,000) VÀ Có ngày tạo VÀ Được gán cho Will hoặc Sarah\n\n## Toán tử\n\nToán tử là các biểu thức được sử dụng bởi bộ lọc để đại diện cho các toán tử truy vấn.\n\n### Loại trường: multienum\n\n| Toán tử                       | Mô tả                               | Ví dụ                                                                          |\n|-------------------------------|-------------------------------------|--------------------------------------------------------------------------------|\n| <nobr>`$contains`</nobr>      | Chứa ít nhất một trong các giá trị  | `\"filter\":[{\"account_categories\":{\"$contains\":[\"Technology\",\"Finance\"]}}]`     |\n| <nobr>`$not_contains`</nobr>  | Không chứa bất kỳ giá trị nào trong | `\"filter\":[{\"account_categories\":{\"$not_contains\":[\"Technology\",\"Finance\"]}}]` |\n\n### Loại trường: enum\n\n| Toán tử            | Mô tả              | Ví dụ                                                          |\n|--------------------|--------------------|----------------------------------------------------------------|\n| <nobr>`$in`</nobr>         | Là một trong       | `\"filter\":[{\"industry\":{\"$in\":[\"Technology\",\"Finance\"]}}]`     |\n| <nobr>`$not_in`</nobr>     | Không là một trong | `\"filter\":[{\"industry\":{\"$not_in\":[\"Technology\",\"Finance\"]}}]` |\n| <nobr>`$empty`</nobr>      | Trống              | `\"filter\":[{\"industry\":{\"$empty\":\"\"}}]`                       |\n| <nobr>`$not_empty`</nobr>  | Không trống        | `\"filter\":[{\"industry\":{\"$not_empty\":\"\"}}]`                   |\n\n### Loại trường: varchar, name, email, text, textarea\n\n| Toán tử            | Mô tả              | Ví dụ                                             |\n|--------------------|--------------------|---------------------------------------------------|\n| <nobr>`$equals`</nobr>   | Khớp chính xác     | `\"filter\":[{\"name\":{\"$equals\":\"Acme Corp\"}}]`     |\n| <nobr>`$starts`</nobr>   | Bắt đầu bằng       | `\"filter\":[{\"name\":{\"$starts\":\"A\"}}]`             |\n| <nobr>`$empty`</nobr>    | Trống              | `\"filter\":[{\"name\":{\"$empty\":\"\"}}]`               |\n| <nobr>`$not_empty`</nobr>| Không trống        | `\"filter\":[{\"name\":{\"$not_empty\":\"\"}}]`           |\n\n### Loại trường: currency, int, double, float, decimal\n\n| Toán tử               | Mô tả                  | Ví dụ                                                         |\n|-----------------------|------------------------|---------------------------------------------------------------|\n| <nobr>`$equals`</nobr>   | Bằng                   | `\"filter\":[{\"annual_revenue\":{\"$equals\":1000000}}]`           |\n| <nobr>`$not_equals`</nobr>| Không bằng            | `\"filter\":[{\"annual_revenue\":{\"$not_equals\":1000000}}]`       |\n| <nobr>`$gt`</nobr>        | Lớn hơn                | `\"filter\":[{\"annual_revenue\":{\"$gt\":1000000}}]`               |\n| <nobr>`$lt`</nobr>        | Nhỏ hơn                | `\"filter\":[{\"annual_revenue\":{\"$lt\":1000000}}]`               |\n| <nobr>`$gte`</nobr>       | Lớn hơn hoặc bằng      | `\"filter\":[{\"annual_revenue\":{\"$gte\":1000000}}]`              |\n| <nobr>`$lte`</nobr>       | Nhỏ hơn hoặc bằng      | `\"filter\":[{\"annual_revenue\":{\"$lte\":1000000}}]`              |\n| <nobr>`$between`</nobr>   | Trong khoảng           | `\"filter\":[{\"annual_revenue\":{\"$between\":[500000,1500000]}}]` |\n\n### Loại trường: date (yyyy-mm-dd)\n\n| Toán tử                   | Mô tả                  | Ví dụ                                                                          |\n|---------------------------|------------------------|--------------------------------------------------------------------------------|\n| <nobr>`$equals`</nobr>       | Bằng (ngày cụ thể)     | `\"filter\":[{\"date_entered\":{\"$equals\":\"2023-01-01\"}}]`                         |\n| <nobr>`$dateBetween`</nobr>  | Trong khoảng           | `\"filter\":[{\"date_entered\":{\"$dateBetween\":[\"2023-01-01\",\"2023-12-31\"]}}]`     |\n| <nobr>`last_month`</nobr>    | Tháng trước            | `\"filter\":[{\"date_entered\":{\"last_month\":\"\"}}]`                                |\n| <nobr>`this_month`</nobr>    | Tháng này              | `\"filter\":[{\"date_entered\":{\"this_month\":\"\"}}]`                                |\n| <nobr>`next_month`</nobr>    | Tháng sau              | `\"filter\":[{\"date_entered\":{\"next_month\":\"\"}}]`                                |\n| <nobr>`$lt`</nobr>           | Trước                  | `\"filter\":[{\"date_entered\":{\"$lt\":\"2023-01-01\"}}]`                             |\n| <nobr>`$gt`</nobr>           | Sau                    | `\"filter\":[{\"date_entered\":{\"$gt\":\"2023-01-01\"}}]`                             |\n| <nobr>`yesterday`</nobr>     | Hôm qua                | `\"filter\":[{\"date_entered\":{\"yesterday\":\"\"}}]`                                 |\n| <nobr>`today`</nobr>         | Hôm nay                | `\"filter\":[{\"date_entered\":{\"today\":\"\"}}]`                                     |\n| <nobr>`tomorrow`</nobr>      | Ngày mai               | `\"filter\":[{\"date_entered\":{\"tomorrow\":\"\"}}]`                                  |\n| <nobr>`last_7_days`</nobr>   | 7 ngày qua             | `\"filter\":[{\"date_entered\":{\"last_7_days\":\"\"}}]`                               |\n| <nobr>`next_7_days`</nobr>   | 7 ngày tới             | `\"filter\":[{\"date_entered\":{\"next_7_days\":\"\"}}]`                               |\n| <nobr>`last_30_days`</nobr>  | 30 ngày qua            | `\"filter\":[{\"date_entered\":{\"last_30_days\":\"\"}}]`                              |\n| <nobr>`next_30_days`</nobr>  | 30 ngày tới            | `\"filter\":[{\"date_entered\":{\"next_30_days\":\"\"}}]`                              |\n| <nobr>`last_year`</nobr>     | Năm ngoái              | `\"filter\":[{\"date_entered\":{\"last_year\":\"\"}}]`                                 |\n| <nobr>`this_year`</nobr>     | Năm nay                | `\"filter\":[{\"date_entered\":{\"this_year\":\"\"}}]`                                 |\n| <nobr>`next_year`</nobr>     | Năm sau                | `\"filter\":[{\"date_entered\":{\"next_year\":\"\"}}]`                                 |\n| <nobr>`$not_empty`</nobr>    | Không trống            | `\"filter\":[{\"date_entered\":{\"$not_empty\":\"\"}}]`                                |\n| <nobr>`$empty`</nobr>        | Trống                  | `\"filter\":[{\"date_entered\":{\"$empty\":\"\"}}]`                                    |\n\n### Loại trường: datetime, datetimecombo (yyyy-mm-ddThh:mm:ss+07:00)\n\n| Toán tử                   | Mô tả                                | Ví dụ                                                                 |\n|---------------------------|--------------------------------------|-----------------------------------------------------------------------|\n| <nobr>`$starts`</nobr>        | Khớp chính xác (ngày giờ)             | `\"filter\":[{\"date_modified\":{\"$starts\":\"2025-06-20T00:00:00+07:00\"}}]` |\n| <nobr>`$dateBetween`</nobr>    | Trong khoảng                         | `\"filter\":[{\"date_modified\":{\"$dateBetween\":[\"2025-06-20T00:00:00+07:00\",\"2025-06-20T00:00:00+07:00\"]}}]` |\n| <nobr>`last_month`</nobr>      | Tháng trước                          | `\"filter\":[{\"date_modified\":{\"last_month\":\"\"}}]`                     |\n| <nobr>`this_month`</nobr>      | Tháng này                            | `\"filter\":[{\"date_modified\":{\"this_month\":\"\"}}]`                     |\n| <nobr>`next_month`</nobr>      | Tháng sau                            | `\"filter\":[{\"date_modified\":{\"next_month\":\"\"}}]`                     |\n| <nobr>`$lte`</nobr>            | Trước                                | `\"filter\":[{\"date_modified\":{\"$lte\":\"2025-06-20T00:00:00+07:00\"}}]`   |\n| <nobr>`$gte`</nobr>            | Sau                                  | `\"filter\":[{\"date_modified\":{\"$gte\":\"2025-06-20T00:00:00+07:00\"}}]`   |\n| <nobr>`yesterday`</nobr>       | Hôm qua                              | `\"filter\":[{\"date_modified\":{\"yesterday\":\"\"}}]`                      |\n| <nobr>`today`</nobr>           | Hôm nay                              | `\"filter\":[{\"date_modified\":{\"today\":\"\"}}]`                          |\n| <nobr>`tomorrow`</nobr>        | Ngày mai                             | `\"filter\":[{\"date_modified\":{\"tomorrow\":\"\"}}]`                       |\n| <nobr>`last_7_days`</nobr>     | 7 ngày qua                           | `\"filter\":[{\"date_modified\":{\"last_7_days\":\"\"}}]`                    |\n| <nobr>`next_7_days`</nobr>     | 7 ngày tới                           | `\"filter\":[{\"date_modified\":{\"next_7_days\":\"\"}}]`                    |\n| <nobr>`last_30_days`</nobr>    | 30 ngày qua                          | `\"filter\":[{\"date_modified\":{\"last_30_days\":\"\"}}]`                   |\n| <nobr>`next_30_days`</nobr>    | 30 ngày tới                          | `\"filter\":[{\"date_modified\":{\"next_30_days\":\"\"}}]`                   |\n| <nobr>`last_year`</nobr>       | Năm ngoái                            | `\"filter\":[{\"date_modified\":{\"last_year\":\"\"}}]`                      |\n| <nobr>`this_year`</nobr>       | Năm nay                              | `\"filter\":[{\"date_modified\":{\"this_year\":\"\"}}]`                      |\n| <nobr>`next_year`</nobr>       | Năm sau                              | `\"filter\":[{\"date_modified\":{\"next_year\":\"\"}}]`                      |\n| <nobr>`$not_empty`</nobr>      | Không trống                          | `\"filter\":[{\"date_modified\":{\"$not_empty\":\"\"}}]`                     |\n\n### Loại trường: bool\n\n| Toán tử               | Mô tả              | Ví dụ                                       |\n|-----------------------|--------------------|---------------------------------------------|\n| <nobr>`$equals`</nobr>     | Là (true/false)    | `\"filter\":[{\"is_active\":{\"$equals\":true}}]` |\n\n### Loại trường: relate\n\n| Toán tử               | Mô tả                                    | Ví dụ                                                             |\n|-----------------------|------------------------------------------|-------------------------------------------------------------------|\n| <nobr>`$in`</nobr>          | Được gán cho một trong (danh sách ID)     | `\"filter\":[{\"assigned_user_id\":{\"$in\":[\"user_id1\",\"user_id2\"]}}]`    |\n| <nobr>`$not_in`</nobr>      | Không được gán cho bất kỳ (danh sách ID) | `\"filter\":[{\"assigned_user_id\":{\"$not_in\":[\"user_id1\",\"user_id2\"]}}]` |\n\n### Loại trường: teamset\n\n| Toán tử               | Mô tả                                                       | Ví dụ                                                                 |\n|-----------------------|-------------------------------------------------------------|-----------------------------------------------------------------------|\n| <nobr>`$in`</nobr>          | Chứa ít nhất một trong các giá trị (danh sách team ID)        | `\"filter\":[{\"team_set_id\":{\"$in\":[\"team_id1\",\"team_id2\"]}}]`         |\n| <nobr>`$not_in`</nobr>      | Không chứa bất kỳ giá trị nào trong (danh sách team ID)    | `\"filter\":[{\"team_set_id\":{\"$not_in\":[\"team_id1\",\"team_id2\"]}}]`    |\n\n### Loại trường: phone\n\n| Toán tử               | Mô tả              | Ví dụ                                                     |\n|-----------------------|--------------------|-----------------------------------------------------------|\n| <nobr>`$starts`</nobr>   | Bắt đầu bằng       | `\"filter\":[{\"phone_work\":{\"$starts\":\"+84\"}}]`             |\n| <nobr>`$equals`</nobr>   | Khớp chính xác     | `\"filter\":[{\"phone_work\":{\"$equals\":\"+84123456789\"}}]`     |\n\n### Loại trường: radioenum\n\n| Toán tử               | Mô tả              | Ví dụ                                             |\n|-----------------------|--------------------|---------------------------------------------------|\n| <nobr>`$equals`</nobr>   | Là                 | `\"filter\":[{\"status\":{\"$equals\":\"Active\"}}]`      |\n| <nobr>`$not_equals`</nobr>| Không là           | `\"filter\":[{\"status\":{\"$not_equals\":\"Inactive\"}}]` |\n\n### Loại trường: parent\n\n| Toán tử               | Mô tả                          | Ví dụ                                                  |\n|-----------------------|--------------------------------|--------------------------------------------------------|\n| <nobr>`$equals`</nobr>   | Là (ID của bản ghi cha)         | `\"filter\":[{\"parent_id\":{\"$equals\":\"record_id\"}}]`     |\n\n### Loại trường: tag\n\n| Toán tử               | Mô tả                                                                    | Ví dụ                                                                 |\n|-----------------------|--------------------------------------------------------------------------|-----------------------------------------------------------------------|\n| <nobr>`$in`</nobr>          | Chứa ít nhất một trong các giá trị (danh sách tag)                      | `\"filter\":[{\"tag\":{\"$in\":[\"tag1\",\"tag2\"]}}]`                          |\n| <nobr>`$not_in`</nobr>      | Không chứa bất kỳ giá trị nào trong (danh sách tag)                    | `\"filter\":[{\"tag\":{\"$not_in\":[\"tag1\",\"tag2\"]}}]`                     |\n| <nobr>`$empty`</nobr>       | Trống                                                                    | `\"filter\":[{\"tag\":{\"$empty\":\"\"}}]`                                   |\n| <nobr>`$not_empty`</nobr>   | Không trống                                                              | `\"filter\":[{\"tag\":{\"$not_empty\":\"\"}}]`                               |\n\n\n\n## Các Điều Kiện Logic trong Bộ Lọc\n\nCác điều kiện logic cho phép bạn kết hợp nhiều bộ lọc thành các biểu thức phức tạp. Hệ thống hỗ trợ ba toán tử logic chính: `$and`, `$or` và `$not`.\n\n### 1. Toán tử $and\n\nToán tử `$and` yêu cầu tất cả các điều kiện bên trong phải đúng.\n\n**Cú pháp:**\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {ĐIỀU KIỆN 1},\n      {ĐIỀU KIỆN 2},\n      ...\n    ]\n  }\n]\n```\n\n**Ví dụ:** Lọc các account thuộc ngành \"Technology\" và có doanh thu trên 1 triệu\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"industry\": {\"$equals\": \"Technology\"}},\n      {\"annual_revenue\": {\"$gt\": 1000000}}\n    ]\n  }\n]\n```\n\n### 2. Toán tử $or\n\nToán tử `$or` yêu cầu ít nhất một điều kiện bên trong phải đúng.\n\n**Cú pháp:**\n\n```\n\"filter\":[\n  {\n    \"$or\": [\n      {ĐIỀU KIỆN 1},\n      {ĐIỀU KIỆN 2},\n      ...\n    ]\n  }\n]\n```\n\n**Ví dụ:** Lọc các contact ở TP.HCM hoặc Hà Nội\n\n```\n\"filter\":[\n  {\n    \"$or\": [\n      {\"primary_address_city\": {\"$equals\": \"TP.HCM\"}},\n      {\"primary_address_city\": {\"$equals\": \"Hà Nội\"}}\n    ]\n  }\n]\n```\n\n### 3. Toán tử $not\n\nToán tử `$not` phủ định một điều kiện.\n\n**Cú pháp:**\n\n```\n\"filter\":[\n  {\n    \"$not\": {ĐIỀU KIỆN}\n  }\n]\n```\n\n**Ví dụ:** Lọc các account không thuộc ngành \"Retail\"\n\n```\n\"filter\":[\n  {\n    \"$not\": {\n      \"industry\": {\"$equals\": \"Retail\"}\n    }\n  }\n]\n```\n\n### 4. Kết hợp nhiều toán tử logic\n\nBạn có thể kết hợp các toán tử logic để tạo ra các biểu thức phức tạp.\n\n**Ví dụ:** Lọc các deal có giá trị trên $10,000 và (status là \"Closed Won\" hoặc \"Negotiation\")\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"amount\": {\"$gt\": 10000}},\n      {\n        \"$or\": [\n          {\"sales_stage\": {\"$equals\": \"Closed Won\"}},\n          {\"sales_stage\": {\"$equals\": \"Negotiation\"}}\n        ]\n      }\n    ]\n  }\n]\n```\n\n### 5. Các lưu ý quan trọng\n\n- Bạn có thể lồng các toán tử logic nhiều mức tùy theo nhu cầu\n- Thứ tự ưu tiên: `$not` > `$and` > `$or`\n- Để kiểm soát thứ tự thực hiện, hãy sử dụng các nhóm điều kiện rõ ràng\n- Khi kết hợp nhiều điều kiện cùng cấp độ, hệ thống sẽ tự động xử lý như toán tử `$and`\n- Đối với các bộ lọc phức tạp, nên định dạng code rõ ràng để dễ bảo trì\n\n**Ví dụ thứ tự ưu tiên:** Biểu thức `A OR B AND C` sẽ được hiểu là `A OR (B AND C)`\n\n```\n\"filter\":[\n  {\n    \"$or\": [\n      {\"A\": ...},\n      {\n        \"$and\": [\n          {\"B\": ...},\n          {\"C\": ...}\n        ]\n      }\n    ]\n  }\n]\n```\n\n## Các biểu thức bộ lọc mẫu\n\nDưới đây là các ví dụ về biểu thức bộ lọc phức tạp thường gặp trong thực tế:\n\n### 1. Kết hợp nhiều điều kiện với $and\n\nLọc các account có ngành là \"Technology\" và doanh thu trên 1 triệu:\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"industry\": {\"$equals\": \"Technology\"}},\n      {\"annual_revenue\": {\"$gt\": 1000000}}\n    ]\n  }\n]\n```\n\n### 2. Kết hợp điều kiện với $or\n\nLọc các contact ở TP.HCM hoặc Hà Nội:\n\n```\n\"filter\":[\n  {\n    \"$or\": [\n      {\"primary_address_city\": {\"$equals\": \"TP.HCM\"}},\n      {\"primary_address_city\": {\"$equals\": \"Hà Nội\"}}\n    ]\n  }\n]\n```\n\n### 3. Lồng ghép $and và $or\n\nLọc các deal có giá trị trên $10,000 và (status là \"Closed Won\" hoặc \"Negotiation\"):\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"amount\": {\"$gt\": 10000}},\n      {\n        \"$or\": [\n          {\"sales_stage\": {\"$equals\": \"Closed Won\"}},\n          {\"sales_stage\": {\"$equals\": \"Negotiation\"}}\n        ]\n      }\n    ]\n  }\n]\n```\n\n### 4. Kết hợp điều kiện ngày và giá trị\n\nLọc các task được tạo trong tháng này và có độ ưu tiên cao:\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"date_entered\": {\"this_month\": \"\"}},\n      {\"priority\": {\"$equals\": \"High\"}}\n    ]\n  }\n]\n```\n\n### 5. Lọc với trường relate và enum\n\nLọc các case được gán cho user A hoặc user B và có mức độ nghiêm trọng cao:\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"assigned_user_id\": {\"$in\": [\"userA_id\", \"userB_id\"]}},\n      {\"severity\": {\"$equals\": \"High\"}}\n    ]\n  }\n]\n```\n\n### 6. Lọc với $not và $or\n\nLọc các account không thuộc ngành \"Retail\" hoặc \"Hospitality\":\n\n```\n\"filter\":[\n  {\n    \"$not\": {\n      \"industry\": {\"$in\": [\"Retail\", \"Hospitality\"]}\n    }\n  }\n]\n```\n\n### 7. Lọc kết hợp multienum và date\n\nLọc các campaign có category chứa \"Email\" hoặc \"Social\" và diễn ra trong năm nay:\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"campaign_category\": {\"$contains\": [\"Email\", \"Social\"]}},\n      {\"start_date\": {\"this_year\": \"\"}}\n    ]\n  }\n]\n```\n\n### 8. Lọc với trường tag phức tạp\n\nLọc các bản ghi có tag \"VIP\" hoặc \"Important\" nhưng không có tag \"Test\":\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"tag\": {\"$in\": [\"VIP\", \"Important\"]}},\n      {\"tag\": {\"$not_in\": [\"Test\"]}}\n    ]\n  }\n]\n```\n\n### 9. Lọc với giá trị null/empty\n\nLọc các lead có email nhưng không có số điện thoại:\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"email\": {\"$not_empty\": \"\"}},\n      {\"phone_mobile\": {\"$empty\": \"\"}}\n    ]\n  }\n]\n```\n\n### 10. Lọc với nhiều mức độ lồng nhau\n\nLọc các opportunity có amount > $50,000 và (ngành là \"Technology\" hoặc (ngành là \"Finance\" và probability > 70%)):\n\n```\n\"filter\":[\n  {\n    \"$and\": [\n      {\"amount\": {\"$gt\": 50000}},\n      {\n        \"$or\": [\n          {\"account_type\": {\"$equals\": \"Technology\"}},\n          {\n            \"$and\": [\n              {\"account_type\": {\"$equals\": \"Finance\"}},\n              {\"probability\": {\"$gt\": 70}}\n            ]\n          }\n        ]\n      }\n    ]\n  }\n]\n```\n"
+  },
+  "servers": [
+    {
+      "url": "http://your-base-url/rest/v11_3"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Lists API",
+      "description": "API lọc danh sách bản ghi (cần token xác thực)"
+    },
+    {
+      "name": "Records API",
+      "description": "API thao tác trên từng bản ghi cụ thể (cần token xác thực)"
+    }
+  ],
+  "paths": {
+    "/{module}": {
+      "get": {
+        "tags": [
+          "Lists API"
+        ],
+        "summary": "Lấy danh sách bản ghi của module (LIST ALL)",
+        "description": "Endpoint trả về toàn bộ các bản ghi (hoặc danh sách các bản ghi tương ứng nếu được lọc theo biểu thức) của module được chỉ định. \n\nBộ lọc có thể áp dụng cho nhiều trường và có thể có nhiều điều kiện trong đó. \nCần lưu ý đảm bảo rằng bất kỳ bộ lọc nào được sử dụng đều có các chỉ mục thích hợp trên phía máy chủ, nếu không thời gian chạy của endpoint sẽ rất lâu.\n",
+        "operationId": "filterModuleAll",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts).",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "Biểu thức bộ lọc (xem chi tiết tại [Biểu thức bộ lọc](./#section/Bieu-thuc-bo-loc-(filter)))",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "max_num",
+            "in": "query",
+            "description": "Số bản ghi tối đa trả về (Ví dụ: 100).",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Số bản ghi bỏ qua trước khi danh sách được trả về.",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "description": "Danh sách trường muốn được trả về.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Sắp xếp kết quả.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deleted",
+            "in": "query",
+            "description": "Cho phép hiển thị bản ghi đã xóa.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "nulls_last",
+            "in": "query",
+            "description": "Đưa các giá trị null xuống cuối danh sách trả về khi sắp xếp.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công, trả về mảng bản ghi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "next_offset": {
+                      "type": "integer",
+                      "description": "offset cho lần gọi kế tiếp, giá trị là -1 nếu không còn bản ghi",
+                      "example": -1
+                    },
+                    "records": {
+                      "type": "array",
+                      "description": "danh sách các bản ghi kết quả.",
+                      "example": [
+                        {
+                          "id": "fa300a0e-0ad1-b322-9601-512d0983c19a",
+                          "name": "Nelson Inc",
+                          "date_modified": "2013-02-28T05:03:00+00:00",
+                          "description": "",
+                          "opportunities": [
+                            {
+                              "_module": "Opportunities",
+                              "id": "b0701501-1fab-8ae7-3942-540da93f5017",
+                              "name": "360 Vacations - 228 Units",
+                              "date_modified": "2014-09-08T16:05:00+03:00",
+                              "sales_status": "New"
+                            }
+                          ],
+                          "_acl": {
+                            "fields": {}
+                          }
+                        },
+                        {
+                          "id": "95e17367-9b3d-0e26-22dc-512d0961fedf",
+                          "name": "Florence Haddock",
+                          "date_modified": "2013-02-26T19:12:00+00:00",
+                          "description": "",
+                          "opportunities": [
+                            {
+                              "_module": "Opportunities",
+                              "id": "9ce7c088-8ee4-7cd3-18f1-540da944d4c0",
+                              "name": "360 Vacations - 312 Units",
+                              "date_modified": "2014-09-08T16:05:00+03:00",
+                              "sales_status": "New"
+                            }
+                          ],
+                          "_acl": {
+                            "fields": {}
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Records API"
+        ],
+        "summary": "Tạo mới bản ghi (Create Record)",
+        "description": "Tạo một bản ghi mới cho module cụ thể.\nEndpoint luôn yêu cầu truyền đúng tham số là tên module theo dạng API name (Ví dụ: Contacts, Accounts, Targets, Prospects).\n\n### Request Body\n\nLà một mảng JSON gồm các trường cần thiết để tạo record cho module tương ứng. \n\n| Tên trường       | Loại trường         | Mô tả                                                                  | Bắt buộc |\n|------------------|---------------------|-----------------------------------------------------------------------|-------------------------------|\n| <nobr>`record field`</nobr>   | <nobr>`record field type`</nobr> | Danh sách tên - giá trị của các field để gán cho bản ghi. Có thể bao gồm cả các liên kết (link fields) để tạo hoặc liên kết các record khác.| True |\n\n### Link fields \n\nCó thể thao tác để thêm vào record mới các relationship link tới các record khác tương ứng, ứng với id được truyền vào.\n\nXét ví dụ về một request body sau:\n\n```json\n{\n  \"name\":\"Example Account\",\n  \"account_type\":\"Customer\",\n  \"description\":\"My Example Account\",\n  \"meetings\": {\n    {\n        \"add\": [\n             \"21e3385e-404f-b470-407e-54044e3d8023\", \n             \"62e3555e-403f-c470-404e-54066e3d8023\"\n        ],\n        \"create\": [\n        {\n            \"name\": \"Test Meeting\"\n        }\n      ]\n    }\n  }\n}\n```\n\nMảng bên trong trường `meetings` đó, gồm có `add` và `create`\n\n`add`: Là danh sách các ID của những bản ghi `Meetings` đã tồn tại muốn liên kết vào record mới.\n\n`create`: Là mảng các object chứa dữ liệu của những `Meetings` mới, nó sẽ được tạo ngay lập tức và tự động liên kết vào record mới.\n",
+        "operationId": "createRecord",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "Accounts"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Ở đây là sample của request để tạo một Lead mới.\nTùy vào nhu cầu sử dụng, có thể thay đổi request body thành các trường khác tương ứng cho phù hợp.\n",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "first_name": {
+                    "type": "string",
+                    "description": "Tên",
+                    "example": "Nguyễn"
+                  },
+                  "last_name": {
+                    "type": "string",
+                    "description": "Họ",
+                    "example": "Văn A"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Email",
+                    "example": "vana@example.com"
+                  },
+                  "phone_mobile": {
+                    "type": "string",
+                    "description": "Số điện thoại",
+                    "example": "0987654321"
+                  },
+                  "lead_source": {
+                    "type": "string",
+                    "description": "Nguồn Lead",
+                    "example": "Walk in"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Trạng thái Lead",
+                    "example": "New"
+                  }
+                }
+              },
+              "example": {
+                "first_name": "Nguyễn",
+                "last_name": "Văn A",
+                "email": "vana@example.com",
+                "phone_mobile": "0987654321",
+                "lead_source": "Walk in",
+                "status": "New"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công – trả về bản ghi vừa tạo",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "6f3b993c-4fed-11f0-9a60-cc28aa8bf61e",
+                  "name": "Văn A Nguyễn",
+                  "date_entered": "2025-06-23T11:49:23+07:00",
+                  "date_modified": "2025-06-23T11:49:23+07:00",
+                  "modified_user_id": "1",
+                  "modified_by_name": "Administrator",
+                  "modified_user_link": {
+                    "full_name": "Administrator",
+                    "id": "1",
+                    "_acl": {
+                      "fields": {
+                        "pwd_last_changed": {
+                          "write": "no",
+                          "create": "no"
+                        },
+                        "last_login": {
+                          "write": "no",
+                          "create": "no"
+                        }
+                      },
+                      "delete": "no",
+                      "_hash": "08b99a97c2e8d792f7a44d8882b5af6d"
+                    }
+                  },
+                  "created_by": "1",
+                  "created_by_name": "Administrator",
+                  "created_by_link": {
+                    "full_name": "Administrator",
+                    "id": "1",
+                    "_acl": {
+                      "fields": {
+                        "pwd_last_changed": {
+                          "write": "no",
+                          "create": "no"
+                        },
+                        "last_login": {
+                          "write": "no",
+                          "create": "no"
+                        }
+                      },
+                      "delete": "no",
+                      "_hash": "08b99a97c2e8d792f7a44d8882b5af6d"
+                    }
+                  },
+                  "description": "",
+                  "deleted": false,
+                  "approval_status": "",
+                  "salutation": "",
+                  "first_name": "Nguyễn",
+                  "last_name": "Văn A",
+                  "full_name": "Văn A Nguyễn",
+                  "title": "",
+                  "facebook": "",
+                  "twitter": "",
+                  "department": "",
+                  "do_not_call": false,
+                  "phone_home": "",
+                  "phone_mobile": "0987654321",
+                  "phone_work": "",
+                  "phone_other": "",
+                  "phone_fax": "",
+                  "primary_address_street": "",
+                  "primary_address_street_2": "",
+                  "primary_address_street_3": "",
+                  "primary_address_city": "",
+                  "primary_address_state": "",
+                  "primary_address_postalcode": "",
+                  "primary_address_country": "",
+                  "alt_address_street": "",
+                  "alt_address_street_2": "",
+                  "alt_address_street_3": "",
+                  "alt_address_city": "",
+                  "alt_address_state": "",
+                  "alt_address_postalcode": "",
+                  "alt_address_country": "",
+                  "assistant": "Van A Nguyen",
+                  "assistant_phone": "",
+                  "picture": "",
+                  "pri_latitude": null,
+                  "pri_longitude": null,
+                  "alt_latitude": null,
+                  "alt_longitude": null,
+                  "date_performed": "",
+                  "performed_user_id": "",
+                  "performed_by_name": "",
+                  "performed_user_link": {
+                    "full_name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "last_call_status": "",
+                  "last_call_result": "",
+                  "last_call_date": "",
+                  "first_call_date": "",
+                  "first_call_result": "",
+                  "last_pt_date": "",
+                  "last_pt_status": "",
+                  "last_visited": "",
+                  "group_source": "",
+                  "converted": false,
+                  "refered_by": "",
+                  "lead_source": "Walk in",
+                  "source_description": "",
+                  "status": "New",
+                  "status_description": "",
+                  "reports_to_id": "",
+                  "report_to_name": "",
+                  "dp_business_purpose": [],
+                  "dp_consent_last_updated": "2025-06-23",
+                  "account_name": "",
+                  "account_to_lead": "",
+                  "accounts": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "account_description": "",
+                  "contact_id": "",
+                  "contact_name": "",
+                  "contacts": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "account_id": "",
+                  "opportunity_id": "",
+                  "converted_opp_name": "",
+                  "opportunity": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb3dc3c17"
+                    }
+                  },
+                  "opportunity_name": "",
+                  "opportunity_amount": "",
+                  "campaign_id": "",
+                  "campaign_name": "",
+                  "campaign_leads": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "c_accept_status_fields": "",
+                  "calls": {
+                    "id": ""
+                  },
+                  "m_accept_status_fields": "",
+                  "meetings": {
+                    "id": ""
+                  },
+                  "accept_status_id": "",
+                  "accept_status_name": "",
+                  "accept_status_calls": "",
+                  "accept_status_meetings": "",
+                  "webtolead_email1": [],
+                  "webtolead_email2": [],
+                  "webtolead_email_opt_out": "",
+                  "webtolead_invalid_email": "",
+                  "birthdate": "",
+                  "portal_name": "",
+                  "portal_app": "",
+                  "website": "",
+                  "preferred_language": "",
+                  "onl_uid": "",
+                  "phone_prefix": "84",
+                  "is_migrate_data": true,
+                  "following": false,
+                  "my_favorite": false,
+                  "tag": [],
+                  "locked_fields": [],
+                  "assigned_user_id": "",
+                  "assigned_user_name": "",
+                  "assigned_user_link": {
+                    "full_name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "team_count": "",
+                  "team_count_link": {
+                    "team_count": "",
+                    "id": "6960e90c-4587-11ef-8351-2070492d436e",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "team_name": [
+                    {
+                      "id": "6960e90c-4587-11ef-8351-2070492d436e",
+                      "name": "CS Mầm Non/2.0",
+                      "name_2": "",
+                      "primary": true,
+                      "selected": false
+                    }
+                  ],
+                  "email": [],
+                  "email1": "",
+                  "email2": "",
+                  "invalid_email": "",
+                  "email_opt_out": "",
+                  "email_addresses_non_primary": "",
+                  "gender": "",
+                  "guardian_name": "",
+                  "guardian_name_2": "",
+                  "nick_name": "",
+                  "other_mobile": "",
+                  "relationship": "",
+                  "relationship2": "",
+                  "grade": "",
+                  "phone_guardian": "",
+                  "prefer_level": [],
+                  "age": null,
+                  "age_text": "0 month(s)",
+                  "full_lead_name": "Văn A Nguyễn",
+                  "potential": "Interested",
+                  "old_student_id": "",
+                  "school_name": "",
+                  "j_school_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "dri_workflow_template_id": "",
+                  "dri_workflow_template_name": "",
+                  "dri_workflow_template_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "class_activity": "",
+                  "schedule_call_status": "",
+                  "schedule_call_date": "",
+                  "is_today_birthday": "",
+                  "allow_create": "",
+                  "reason": "",
+                  "reference_logs": "",
+                  "cj_process_key": "",
+                  "reference": "",
+                  "utm_source": "",
+                  "utm_medium": "",
+                  "utm_content": "",
+                  "utm_term": "",
+                  "channel": "",
+                  "utm_agent_id": "",
+                  "utm_agent": "",
+                  "utm_agent_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "school_id": "",
+                  "team_name_text": "CS Mầm Non/2.0",
+                  "_acl": {
+                    "fields": {}
+                  },
+                  "_module": "Leads"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/{module}/count": {
+      "get": {
+        "tags": [
+          "Lists API"
+        ],
+        "summary": "Lấy tổng số bản ghi (COUNT)",
+        "description": "Endpoint trả về số lượng các bản ghi (hoặc danh sách các bản ghi tương ứng nếu được lọc theo biểu thức) của module được chỉ định. \n\nBộ lọc có thể áp dụng cho nhiều trường và có thể có nhiều điều kiện trong đó. \nCần lưu ý đảm bảo rằng bất kỳ bộ lọc nào được sử dụng đều có các chỉ mục thích hợp trên phía máy chủ, nếu không thời gian chạy của endpoint sẽ rất lâu.\n",
+        "operationId": "filterModuleAllCount",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts).",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "Biểu thức bộ lọc (xem chi tiết tại [Biểu thức bộ lọc](./#section/Bieu-thuc-bo-loc-(filter)))",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "max_num",
+            "in": "query",
+            "description": "Số bản ghi tối đa trả về (Ví dụ: 100).",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Số bản ghi bỏ qua trước khi danh sách được trả về.",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "description": "Danh sách trường muốn được trả về.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Sắp xếp kết quả.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deleted",
+            "in": "query",
+            "description": "Cho phép hiển thị bản ghi đã xóa.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "nulls_last",
+            "in": "query",
+            "description": "Đưa các giá trị null xuống cuối danh sách trả về khi sắp xếp.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công, trả về số lượng bản ghi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "record_count": {
+                      "type": "integer",
+                      "description": "Tổng số bản ghi thỏa filter (hoặc toàn bộ nếu không có filter).",
+                      "example": 1234
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/{module}/filter": {
+      "get": {
+        "tags": [
+          "Lists API"
+        ],
+        "summary": "Lấy danh sách bản ghi đã được lọc (GET)",
+        "description": "Endpoint trả về danh sách các bản ghi tương ứng được lọc theo biểu thức của module được chỉ định. \n\nBộ lọc có thể áp dụng cho nhiều trường và có thể có nhiều điều kiện trong đó. \nCần lưu ý đảm bảo rằng bất kỳ bộ lọc nào được sử dụng đều có các chỉ mục thích hợp trên phía máy chủ, nếu không thời gian chạy của endpoint sẽ rất lâu.\n",
+        "operationId": "filterModuleGet",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts).",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "Biểu thức bộ lọc (xem chi tiết tại [Biểu thức bộ lọc](./#section/Bieu-thuc-bo-loc-(filter)))",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "max_num",
+            "in": "query",
+            "description": "Số bản ghi tối đa trả về (Ví dụ: 100).",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Số bản ghi bỏ qua trước khi danh sách được trả về.",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "description": "Danh sách trường muốn được trả về.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Sắp xếp kết quả.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deleted",
+            "in": "query",
+            "description": "Cho phép hiển thị bản ghi đã xóa.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "nulls_last",
+            "in": "query",
+            "description": "Đưa các giá trị null xuống cuối danh sách trả về khi sắp xếp.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công, trả về mảng bản ghi",
+            "content": {
+              "application/json": {
+                "example": {
+                  "next_offset": -1,
+                  "records": [
+                    {
+                      "id": "fa300a0e-0ad1-b322-9601-512d0983c19a",
+                      "name": "Nelson Inc",
+                      "date_modified": "2013-02-28T05:03:00+00:00",
+                      "description": "",
+                      "opportunities": [
+                        {
+                          "_module": "Opportunities",
+                          "id": "b0701501-1fab-8ae7-3942-540da93f5017",
+                          "name": "360 Vacations - 228 Units",
+                          "date_modified": "2014-09-08T16:05:00+03:00",
+                          "sales_status": "New"
+                        }
+                      ],
+                      "_acl": {
+                        "fields": {}
+                      }
+                    },
+                    {
+                      "id": "95e17367-9b3d-0e26-22dc-512d0961fedf",
+                      "name": "Florence Haddock",
+                      "date_modified": "2013-02-26T19:12:00+00:00",
+                      "description": "",
+                      "opportunities": [
+                        {
+                          "_module": "Opportunities",
+                          "id": "9ce7c088-8ee4-7cd3-18f1-540da944d4c0",
+                          "name": "360 Vacations - 312 Units",
+                          "date_modified": "2014-09-08T16:05:00+03:00",
+                          "sales_status": "New"
+                        }
+                      ],
+                      "_acl": {
+                        "fields": {}
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Lists API"
+        ],
+        "summary": "Lấy danh sách bản ghi đã được lọc (POST)",
+        "description": "*Tương tự GET /filter nhưng nhận filter JSON trong request body, tiện lợi cho filter phức tạp, lồng nhau.*\n\nEndpoint trả về danh sách các bản ghi tương ứng được lọc theo biểu thức của module được chỉ định. \n\nBộ lọc có thể áp dụng cho nhiều trường và có thể có nhiều điều kiện trong đó. \nCần lưu ý đảm bảo rằng bất kỳ bộ lọc nào được sử dụng đều có các chỉ mục thích hợp trên phía máy chủ, nếu không thời gian chạy của endpoint sẽ rất lâu.\n",
+        "operationId": "filterModulePost",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts, Leads).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "Accounts"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "filter": {
+                    "type": "string",
+                    "description": "Biểu thức bộ lọc (xem chi tiết tại [Biểu thức bộ lọc](./#section/Bieu-thuc-bo-loc-(filter)))",
+                    "example": [
+                      {
+                        "$or": [
+                          {
+                            "name": {
+                              "$equals": "Nelson Inc"
+                            }
+                          },
+                          {
+                            "name": {
+                              "$equals": "Nelson LLC"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "max_num": {
+                    "type": "integer",
+                    "description": "Số bản ghi tối đa trả về (Ví dụ: 100).",
+                    "example": 100
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "description": "Số bản ghi bỏ qua trước khi danh sách được trả về.",
+                    "example": 0
+                  },
+                  "fields": {
+                    "type": "string",
+                    "description": "Danh sách trường muốn được trả về, phân tách bằng dấu phẩy.",
+                    "example": "id,name,date_modified"
+                  },
+                  "order_by": {
+                    "type": "string",
+                    "description": "Sắp xếp kết quả, ví dụ: 'date_modified:desc,name:asc'.",
+                    "example": "date_modified:desc"
+                  },
+                  "deleted": {
+                    "type": "boolean",
+                    "description": "Cho phép hiển thị bản ghi đã xóa.",
+                    "example": false
+                  },
+                  "nulls_last": {
+                    "type": "boolean",
+                    "description": "Đưa các giá trị null xuống cuối danh sách trả về khi sắp xếp.",
+                    "example": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công, trả về mảng bản ghi",
+            "content": {
+              "application/json": {
+                "example": {
+                  "next_offset": -1,
+                  "records": [
+                    {
+                      "id": "fa300a0e-0ad1-b322-9601-512d0983c19a",
+                      "name": "Nelson Inc",
+                      "date_modified": "2013-02-28T05:03:00+00:00",
+                      "description": "",
+                      "opportunities": [
+                        {
+                          "_module": "Opportunities",
+                          "id": "b0701501-1fab-8ae7-3942-540da93f5017",
+                          "name": "360 Vacations - 228 Units",
+                          "date_modified": "2014-09-08T16:05:00+03:00",
+                          "sales_status": "New"
+                        }
+                      ],
+                      "_acl": {
+                        "fields": {}
+                      }
+                    },
+                    {
+                      "id": "95e17367-9b3d-0e26-22dc-512d0961fedf",
+                      "name": "Florence Haddock",
+                      "date_modified": "2013-02-26T19:12:00+00:00",
+                      "description": "",
+                      "opportunities": [
+                        {
+                          "_module": "Opportunities",
+                          "id": "9ce7c088-8ee4-7cd3-18f1-540da944d4c0",
+                          "name": "360 Vacations - 312 Units",
+                          "date_modified": "2014-09-08T16:05:00+03:00",
+                          "sales_status": "New"
+                        }
+                      ],
+                      "_acl": {
+                        "fields": {}
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/{module}/filter/count": {
+      "get": {
+        "tags": [
+          "Lists API"
+        ],
+        "summary": "Lấy tổng số bản ghi đã lọc (COUNT – GET)",
+        "description": "Endpoint trả về số lượng các bản ghi tương ứng được lọc theo biểu thức của module được chỉ định. \n\nBộ lọc có thể áp dụng cho nhiều trường và có thể có nhiều điều kiện trong đó. \nCần lưu ý đảm bảo rằng bất kỳ bộ lọc nào được sử dụng đều có các chỉ mục thích hợp trên phía máy chủ, nếu không thời gian chạy của endpoint sẽ rất lâu.\n",
+        "operationId": "filterModuleCount",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts).",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "Biểu thức bộ lọc (xem chi tiết tại [Biểu thức bộ lọc](./#section/Bieu-thuc-bo-loc-(filter)))",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "max_num",
+            "in": "query",
+            "description": "Số bản ghi tối đa trả về (Ví dụ: 100).",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Số bản ghi bỏ qua trước khi danh sách được trả về.",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "description": "Danh sách trường muốn được trả về.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Sắp xếp kết quả.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deleted",
+            "in": "query",
+            "description": "Cho phép hiển thị bản ghi đã xóa.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "nulls_last",
+            "in": "query",
+            "description": "Đưa các giá trị null xuống cuối danh sách trả về khi sắp xếp.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công, trả về số lượng bản ghi đã lọc.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "record_count": {
+                      "type": "integer",
+                      "description": "Số bản ghi thỏa filter.",
+                      "example": 42
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Lists API"
+        ],
+        "summary": "Lấy tổng số bản ghi đã lọc (COUNT – POST)",
+        "description": "*Tương tự GET /filter/count nhưng nhận filter JSON trong request body, tiện lợi cho filter phức tạp, lồng nhau.*\n\nEndpoint trả về danh sách các bản ghi tương ứng được lọc theo biểu thức của module được chỉ định. \n\nBộ lọc có thể áp dụng cho nhiều trường và có thể có nhiều điều kiện trong đó. \nCần lưu ý đảm bảo rằng bất kỳ bộ lọc nào được sử dụng đều có các chỉ mục thích hợp trên phía máy chủ, nếu không thời gian chạy của endpoint sẽ rất lâu.\n",
+        "operationId": "filterModulePostCount",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "Opportunities"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "filter": {
+                    "type": "string",
+                    "description": "Biểu thức bộ lọc (xem chi tiết tại [Biểu thức bộ lọc](./#section/Bieu-thuc-bo-loc-(filter)))",
+                    "example": [
+                      {
+                        "$or": [
+                          {
+                            "name": {
+                              "$equals": "Nelson Inc"
+                            }
+                          },
+                          {
+                            "name": {
+                              "$equals": "Nelson LLC"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "max_num": {
+                    "type": "integer",
+                    "description": "Số bản ghi tối đa trả về (Ví dụ: 100).",
+                    "example": 100
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "description": "Số bản ghi bỏ qua trước khi danh sách được trả về.",
+                    "example": 0
+                  },
+                  "fields": {
+                    "type": "string",
+                    "description": "Danh sách trường muốn được trả về, phân tách bằng dấu phẩy.",
+                    "example": "id,name,date_modified"
+                  },
+                  "order_by": {
+                    "type": "string",
+                    "description": "Sắp xếp kết quả, ví dụ: 'date_modified:desc,name:asc'.",
+                    "example": "date_modified:desc"
+                  },
+                  "deleted": {
+                    "type": "boolean",
+                    "description": "Cho phép hiển thị bản ghi đã xóa.",
+                    "example": false
+                  },
+                  "nulls_last": {
+                    "type": "boolean",
+                    "description": "Đưa các giá trị null xuống cuối danh sách trả về khi sắp xếp.",
+                    "example": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công, trả về số lượng bản ghi đã lọc.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "record_count": {
+                      "type": "integer",
+                      "description": "Số bản ghi thỏa filter.",
+                      "example": 42
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/{module}/{record}": {
+      "get": {
+        "tags": [
+          "Records API"
+        ],
+        "summary": "Lấy thông tin chi tiết của một bản ghi",
+        "description": "Trả về chi tiết của một bản ghi cụ thể trong module, dựa vào ID.",
+        "operationId": "getModuleRecord",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "Accounts"
+            }
+          },
+          {
+            "name": "record",
+            "in": "path",
+            "description": "ID của bản ghi.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thành công trả về bản ghi có ID tương ứng",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "6f3b993c-4fed-11f0-9a60-cc28aa8bf61e",
+                  "name": "Văn A Nguyễn",
+                  "date_entered": "2025-06-23T11:49:23+07:00",
+                  "date_modified": "2025-06-23T11:49:23+07:00",
+                  "modified_user_id": "1",
+                  "modified_by_name": "Administrator",
+                  "modified_user_link": {
+                    "full_name": "Administrator",
+                    "id": "1",
+                    "_acl": {
+                      "fields": {
+                        "pwd_last_changed": {
+                          "write": "no",
+                          "create": "no"
+                        },
+                        "last_login": {
+                          "write": "no",
+                          "create": "no"
+                        }
+                      },
+                      "delete": "no",
+                      "_hash": "08b99a97c2e8d792f7a44d8882b5af6d"
+                    }
+                  },
+                  "created_by": "1",
+                  "created_by_name": "Administrator",
+                  "created_by_link": {
+                    "full_name": "Administrator",
+                    "id": "1",
+                    "_acl": {
+                      "fields": {
+                        "pwd_last_changed": {
+                          "write": "no",
+                          "create": "no"
+                        },
+                        "last_login": {
+                          "write": "no",
+                          "create": "no"
+                        }
+                      },
+                      "delete": "no",
+                      "_hash": "08b99a97c2e8d792f7a44d8882b5af6d"
+                    }
+                  },
+                  "description": "",
+                  "deleted": false,
+                  "approval_status": "",
+                  "salutation": "",
+                  "first_name": "Nguyễn",
+                  "last_name": "Văn A",
+                  "full_name": "Văn A Nguyễn",
+                  "title": "",
+                  "facebook": "",
+                  "twitter": "",
+                  "department": "",
+                  "do_not_call": false,
+                  "phone_home": "",
+                  "phone_mobile": "0987654321",
+                  "phone_work": "",
+                  "phone_other": "",
+                  "phone_fax": "",
+                  "primary_address_street": "",
+                  "primary_address_street_2": "",
+                  "primary_address_street_3": "",
+                  "primary_address_city": "",
+                  "primary_address_state": "",
+                  "primary_address_postalcode": "",
+                  "primary_address_country": "",
+                  "alt_address_street": "",
+                  "alt_address_street_2": "",
+                  "alt_address_street_3": "",
+                  "alt_address_city": "",
+                  "alt_address_state": "",
+                  "alt_address_postalcode": "",
+                  "alt_address_country": "",
+                  "assistant": "Van A Nguyen",
+                  "assistant_phone": "",
+                  "picture": "",
+                  "pri_latitude": null,
+                  "pri_longitude": null,
+                  "alt_latitude": null,
+                  "alt_longitude": null,
+                  "date_performed": "",
+                  "performed_user_id": "",
+                  "performed_by_name": "",
+                  "performed_user_link": {
+                    "full_name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "last_call_status": "",
+                  "last_call_result": "",
+                  "last_call_date": "",
+                  "first_call_date": "",
+                  "first_call_result": "",
+                  "last_pt_date": "",
+                  "last_pt_status": "",
+                  "last_visited": "",
+                  "group_source": "",
+                  "converted": false,
+                  "refered_by": "",
+                  "lead_source": "Walk in",
+                  "source_description": "",
+                  "status": "New",
+                  "status_description": "",
+                  "reports_to_id": "",
+                  "report_to_name": "",
+                  "dp_business_purpose": [],
+                  "dp_consent_last_updated": "2025-06-23",
+                  "account_name": "",
+                  "account_to_lead": "",
+                  "accounts": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "account_description": "",
+                  "contact_id": "",
+                  "contact_name": "",
+                  "contacts": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "account_id": "",
+                  "opportunity_id": "",
+                  "converted_opp_name": "",
+                  "opportunity": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb3dc3c17"
+                    }
+                  },
+                  "opportunity_name": "",
+                  "opportunity_amount": "",
+                  "campaign_id": "",
+                  "campaign_name": "",
+                  "campaign_leads": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "c_accept_status_fields": "",
+                  "calls": {
+                    "id": ""
+                  },
+                  "m_accept_status_fields": "",
+                  "meetings": {
+                    "id": ""
+                  },
+                  "accept_status_id": "",
+                  "accept_status_name": "",
+                  "accept_status_calls": "",
+                  "accept_status_meetings": "",
+                  "webtolead_email1": [],
+                  "webtolead_email2": [],
+                  "webtolead_email_opt_out": "",
+                  "webtolead_invalid_email": "",
+                  "birthdate": "",
+                  "portal_name": "",
+                  "portal_app": "",
+                  "website": "",
+                  "preferred_language": "",
+                  "onl_uid": "",
+                  "phone_prefix": "84",
+                  "is_migrate_data": true,
+                  "following": false,
+                  "my_favorite": false,
+                  "tag": [],
+                  "locked_fields": [],
+                  "assigned_user_id": "",
+                  "assigned_user_name": "",
+                  "assigned_user_link": {
+                    "full_name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "team_count": "",
+                  "team_count_link": {
+                    "team_count": "",
+                    "id": "6960e90c-4587-11ef-8351-2070492d436e",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "team_name": [
+                    {
+                      "id": "6960e90c-4587-11ef-8351-2070492d436e",
+                      "name": "CS Mầm Non/2.0",
+                      "name_2": "",
+                      "primary": true,
+                      "selected": false
+                    }
+                  ],
+                  "email": [],
+                  "email1": "",
+                  "email2": "",
+                  "invalid_email": "",
+                  "email_opt_out": "",
+                  "email_addresses_non_primary": "",
+                  "gender": "",
+                  "guardian_name": "",
+                  "guardian_name_2": "",
+                  "nick_name": "",
+                  "other_mobile": "",
+                  "relationship": "",
+                  "relationship2": "",
+                  "grade": "",
+                  "phone_guardian": "",
+                  "prefer_level": [],
+                  "age": null,
+                  "age_text": "0 month(s)",
+                  "full_lead_name": "Văn A Nguyễn",
+                  "potential": "Interested",
+                  "old_student_id": "",
+                  "school_name": "",
+                  "j_school_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "dri_workflow_template_id": "",
+                  "dri_workflow_template_name": "",
+                  "dri_workflow_template_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "class_activity": "",
+                  "schedule_call_status": "",
+                  "schedule_call_date": "",
+                  "is_today_birthday": "",
+                  "allow_create": "",
+                  "reason": "",
+                  "reference_logs": "",
+                  "cj_process_key": "",
+                  "reference": "",
+                  "utm_source": "",
+                  "utm_medium": "",
+                  "utm_content": "",
+                  "utm_term": "",
+                  "channel": "",
+                  "utm_agent_id": "",
+                  "utm_agent": "",
+                  "utm_agent_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "school_id": "",
+                  "team_name_text": "CS Mầm Non/2.0",
+                  "_acl": {
+                    "fields": {}
+                  },
+                  "_module": "Leads"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Records API"
+        ],
+        "summary": "Cập nhật bản ghi với các trường được chỉ định (Update Record)",
+        "description": "Cập nhật bản ghi với các trường cụ thể được chỉ định trong request.\n\nEndpoint luôn yêu cầu truyền đúng tham số là tên module theo dạng API name (Ví dụ: Contacts, Accounts, Targets, Prospects).\n\n### Request Body\n\nLà một mảng JSON gồm các trường cần thiết để tạo record cho module tương ứng. \n\n| Tên trường       | Loại trường         | Mô tả                                                                  | Bắt buộc |\n|------------------|---------------------|-----------------------------------------------------------------------|-------------------------------|\n| <nobr>`record field`</nobr>   | <nobr>`record field type`</nobr> | Danh sách tên - giá trị của các field để gán cho bản ghi. Có thể bao gồm cả các liên kết (link fields) để tạo hoặc liên kết các record khác.| True |\n\n### Link fields \n\nCó thể thao tác để thêm vào record mới các relationship link tới các record khác tương ứng, ứng với id được truyền vào.\n\nXét ví dụ về một request body sau:\n\n```json\n{\n  \"name\":\"Example Account\",\n  \"account_type\":\"Customer\",\n  \"description\":\"My Example Account\",\n  \"meetings\": {\n    {\n        \"add\": [\"21e3385e-404f-b470-407e-54044e3d8024\"],\n        \"delete\": [\"21e3385e-404f-b470-407e-54044e3d8023\"],\n        \"create\": [\n        {\n            \"name\": \"Test Meeting\"\n        }\n      ]\n    }\n  }\n}\n```\n\nMảng bên trong trường `meetings` đó, gồm có `add`, `create` và `delete`\n\n`add`: Là danh sách các ID của những bản ghi `Meetings` đã tồn tại muốn liên kết vào record mới.\n\n`create`: Là mảng các object chứa dữ liệu của những `Meetings` mới, nó sẽ được tạo ngay lập tức và tự động liên kết vào record mới.\n\n`delete`: Là danh sách các ID của những bản ghi `Meetings` đã tồn tại muốn xóa khỏi record.\n",
+        "operationId": "updateRecord",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "Accounts"
+            }
+          },
+          {
+            "name": "record",
+            "in": "path",
+            "description": "ID của bản ghi cần cập nhật.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Ở đây là sample của request để chỉnh sửa Lead có sẵn.\nTùy vào nhu cầu sử dụng, có thể thay đổi request body thành các trường khác tương ứng cho phù hợp.\n",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "last_name"
+                ],
+                "properties": {
+                  "first_name": {
+                    "type": "string",
+                    "description": "Tên",
+                    "example": "Nguyễn"
+                  },
+                  "last_name": {
+                    "type": "string",
+                    "description": "Họ",
+                    "example": "Văn A phiên bản mới"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Email chính",
+                    "example": "NEWVANA@example.com"
+                  },
+                  "phone_mobile": {
+                    "type": "string",
+                    "description": "Số điện thoại",
+                    "example": "0987654321"
+                  },
+                  "lead_source": {
+                    "type": "string",
+                    "description": "Nguồn Lead",
+                    "example": "Call in"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Trạng thái Lead",
+                    "example": "Converted"
+                  }
+                }
+              },
+              "example": {
+                "first_name": "Nguyễn",
+                "last_name": "Văn A phiên bản mới",
+                "email": "NEWVANA@example.com",
+                "phone_mobile": "0987654321",
+                "lead_source": "Call in",
+                "status": "Converted"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công - trả về record vừa được chỉnh sửa",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "6f3b993c-4fed-11f0-9a60-cc28aa8bf61e",
+                  "name": "Văn A Phiên Bản Mới Nguyễn",
+                  "date_entered": "2025-06-23T11:49:23+07:00",
+                  "date_modified": "2025-06-23T11:59:29+07:00",
+                  "modified_user_id": "1",
+                  "modified_by_name": "Administrator",
+                  "modified_user_link": {
+                    "full_name": "Administrator",
+                    "id": "1",
+                    "_acl": {
+                      "fields": {
+                        "pwd_last_changed": {
+                          "write": "no",
+                          "create": "no"
+                        },
+                        "last_login": {
+                          "write": "no",
+                          "create": "no"
+                        }
+                      },
+                      "delete": "no",
+                      "_hash": "08b99a97c2e8d792f7a44d8882b5af6d"
+                    }
+                  },
+                  "created_by": "1",
+                  "created_by_name": "Administrator",
+                  "created_by_link": {
+                    "full_name": "Administrator",
+                    "id": "1",
+                    "_acl": {
+                      "fields": {
+                        "pwd_last_changed": {
+                          "write": "no",
+                          "create": "no"
+                        },
+                        "last_login": {
+                          "write": "no",
+                          "create": "no"
+                        }
+                      },
+                      "delete": "no",
+                      "_hash": "08b99a97c2e8d792f7a44d8882b5af6d"
+                    }
+                  },
+                  "description": "",
+                  "deleted": false,
+                  "approval_status": "",
+                  "salutation": "",
+                  "first_name": "Nguyễn",
+                  "last_name": "Văn A Phiên Bản Mới",
+                  "full_name": "Văn A Phiên Bản Mới Nguyễn",
+                  "title": "",
+                  "facebook": "",
+                  "twitter": "",
+                  "department": "",
+                  "do_not_call": false,
+                  "phone_home": "",
+                  "phone_mobile": "0987654321",
+                  "phone_work": "",
+                  "phone_other": "",
+                  "phone_fax": "",
+                  "primary_address_street": "",
+                  "primary_address_street_2": "",
+                  "primary_address_street_3": "",
+                  "primary_address_city": "",
+                  "primary_address_state": "",
+                  "primary_address_postalcode": "",
+                  "primary_address_country": "",
+                  "alt_address_street": "",
+                  "alt_address_street_2": "",
+                  "alt_address_street_3": "",
+                  "alt_address_city": "",
+                  "alt_address_state": "",
+                  "alt_address_postalcode": "",
+                  "alt_address_country": "",
+                  "assistant": "Van A Phien Ban Moi Nguyen",
+                  "assistant_phone": "",
+                  "picture": "",
+                  "pri_latitude": null,
+                  "pri_longitude": null,
+                  "alt_latitude": null,
+                  "alt_longitude": null,
+                  "date_performed": "",
+                  "performed_user_id": "",
+                  "performed_by_name": "",
+                  "performed_user_link": {
+                    "full_name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "last_call_status": "",
+                  "last_call_result": "",
+                  "last_call_date": "",
+                  "first_call_date": "",
+                  "first_call_result": "",
+                  "last_pt_date": "",
+                  "last_pt_status": "",
+                  "last_visited": "",
+                  "group_source": "",
+                  "converted": false,
+                  "refered_by": "",
+                  "lead_source": "Call in",
+                  "source_description": "",
+                  "status": "Converted",
+                  "status_description": "",
+                  "reports_to_id": "",
+                  "report_to_name": "",
+                  "dp_business_purpose": [],
+                  "dp_consent_last_updated": "2025-06-23",
+                  "account_name": "",
+                  "account_to_lead": "",
+                  "accounts": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "account_description": "",
+                  "contact_id": "",
+                  "contact_name": "",
+                  "contacts": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "account_id": "",
+                  "opportunity_id": "",
+                  "converted_opp_name": "",
+                  "opportunity": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "opportunity_name": "",
+                  "opportunity_amount": "",
+                  "campaign_id": "",
+                  "campaign_name": "",
+                  "campaign_leads": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "c_accept_status_fields": "",
+                  "calls": {
+                    "id": ""
+                  },
+                  "m_accept_status_fields": "",
+                  "meetings": {
+                    "id": ""
+                  },
+                  "accept_status_id": "",
+                  "accept_status_name": "",
+                  "accept_status_calls": "",
+                  "accept_status_meetings": "",
+                  "webtolead_email1": [],
+                  "webtolead_email2": [],
+                  "webtolead_email_opt_out": "",
+                  "webtolead_invalid_email": "",
+                  "birthdate": "",
+                  "portal_name": "",
+                  "portal_app": "",
+                  "website": "",
+                  "preferred_language": "",
+                  "onl_uid": "",
+                  "phone_prefix": "84",
+                  "is_migrate_data": true,
+                  "following": false,
+                  "my_favorite": false,
+                  "tag": [],
+                  "locked_fields": [],
+                  "assigned_user_id": "",
+                  "assigned_user_name": "",
+                  "assigned_user_link": {
+                    "full_name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "team_count": "",
+                  "team_count_link": {
+                    "team_count": "",
+                    "id": "6960e90c-4587-11ef-8351-2070492d436e",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "team_name": [
+                    {
+                      "id": "6960e90c-4587-11ef-8351-2070492d436e",
+                      "name": "CS Mầm Non/2.0",
+                      "name_2": "",
+                      "primary": true,
+                      "selected": false
+                    }
+                  ],
+                  "email": [],
+                  "email1": "",
+                  "email2": "",
+                  "invalid_email": "",
+                  "email_opt_out": "",
+                  "email_addresses_non_primary": "",
+                  "gender": "",
+                  "guardian_name": "",
+                  "guardian_name_2": "",
+                  "nick_name": "",
+                  "other_mobile": "",
+                  "relationship": "",
+                  "relationship2": "",
+                  "grade": "",
+                  "phone_guardian": "",
+                  "prefer_level": [],
+                  "age": null,
+                  "age_text": "0 month(s)",
+                  "full_lead_name": "Văn A Phiên Bản Mới Nguyễn",
+                  "potential": "Interested",
+                  "old_student_id": "",
+                  "school_name": "",
+                  "j_school_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "dri_workflow_template_id": "",
+                  "dri_workflow_template_name": "",
+                  "dri_workflow_template_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "class_activity": "",
+                  "schedule_call_status": "",
+                  "schedule_call_date": "",
+                  "is_today_birthday": "",
+                  "allow_create": "",
+                  "reason": "",
+                  "reference_logs": "",
+                  "cj_process_key": "",
+                  "reference": "",
+                  "utm_source": "",
+                  "utm_medium": "",
+                  "utm_content": "",
+                  "utm_term": "",
+                  "channel": "",
+                  "utm_agent_id": "",
+                  "utm_agent": "",
+                  "utm_agent_link": {
+                    "name": "",
+                    "id": "",
+                    "_acl": {
+                      "fields": [],
+                      "_hash": "654d337e0e912edaa00dbb0fb3dc3c17"
+                    }
+                  },
+                  "school_id": "",
+                  "team_name_text": "CS Mầm Non/2.0",
+                  "_acl": {
+                    "fields": {}
+                  },
+                  "_module": "Leads"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Records API"
+        ],
+        "summary": "Xóa bản ghi theo ID",
+        "description": "Xóa một bản ghi trong module đã chỉ định.",
+        "operationId": "deleteModuleRecord",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "Tên module (ví dụ: Accounts, Contacts).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "Accounts"
+            }
+          },
+          {
+            "name": "record",
+            "in": "path",
+            "description": "ID của bản ghi cần xóa.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "11cf0d0a-40af-8cb1-9da0-5057a5f511f9"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa thành công, trả về ID bản ghi vừa xóa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "ID của bản ghi đã bị xóa",
+                      "example": "11cf0d0a-40af-8cb1-9da0-5057a5f511f9"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "apiKey",
+        "name": "Authorization",
+        "in": "header",
+        "description": "Nhập Bearer token theo định dạng: `Bearer <access_token>`"
+      }
+    }
+  },
+  "info.description": null
+}
