@@ -1,4 +1,4 @@
-openapi: 3.0.0
+openapi: 3.1.0
 info:
   version: '1.0'
   title: DOTB API
@@ -1204,33 +1204,41 @@ paths:
           description: Thành công, trả về mảng bản ghi
           content:
             application/json:
-              example:
-                next_offset: -1
-                records:
-                  - id: fa300a0e-0ad1-b322-9601-512d0983c19a
-                    name: Nelson Inc
-                    date_modified: '2013-02-28T05:03:00+00:00'
-                    description: ''
-                    opportunities:
-                      - _module: Opportunities
-                        id: b0701501-1fab-8ae7-3942-540da93f5017
-                        name: 360 Vacations - 228 Units
-                        date_modified: '2014-09-08T16:05:00+03:00'
-                        sales_status: New
-                    _acl:
-                      fields: {}
-                  - id: 95e17367-9b3d-0e26-22dc-512d0961fedf
-                    name: Florence Haddock
-                    date_modified: '2013-02-26T19:12:00+00:00'
-                    description: ''
-                    opportunities:
-                      - _module: Opportunities
-                        id: 9ce7c088-8ee4-7cd3-18f1-540da944d4c0
-                        name: 360 Vacations - 312 Units
-                        date_modified: '2014-09-08T16:05:00+03:00'
-                        sales_status: New
-                    _acl:
-                      fields: {}
+              schema:
+                type: object
+                properties:
+                  next_offset:
+                    type: integer
+                    description: offset cho lần gọi kế tiếp, giá trị là -1 nếu không còn bản ghi
+                    example: -1
+                  records:
+                    type: array
+                    description: danh sách các bản ghi kết quả.
+                    example:
+                      - id: fa300a0e-0ad1-b322-9601-512d0983c19a
+                        name: Nelson Inc
+                        date_modified: '2013-02-28T05:03:00+00:00'
+                        description: ''
+                        opportunities:
+                          - _module: Opportunities
+                            id: b0701501-1fab-8ae7-3942-540da93f5017
+                            name: 360 Vacations - 228 Units
+                            date_modified: '2014-09-08T16:05:00+03:00'
+                            sales_status: New
+                        _acl:
+                          fields: {}
+                      - id: 95e17367-9b3d-0e26-22dc-512d0961fedf
+                        name: Florence Haddock
+                        date_modified: '2013-02-26T19:12:00+00:00'
+                        description: ''
+                        opportunities:
+                          - _module: Opportunities
+                            id: 9ce7c088-8ee4-7cd3-18f1-540da944d4c0
+                            name: 360 Vacations - 312 Units
+                            date_modified: '2014-09-08T16:05:00+03:00'
+                            sales_status: New
+                        _acl:
+                          fields: {}
       security:
         - BearerAuth: []
     post:
@@ -1298,33 +1306,41 @@ paths:
           description: Thành công, trả về mảng bản ghi
           content:
             application/json:
-              example:
-                next_offset: -1
-                records:
-                  - id: fa300a0e-0ad1-b322-9601-512d0983c19a
-                    name: Nelson Inc
-                    date_modified: '2013-02-28T05:03:00+00:00'
-                    description: ''
-                    opportunities:
-                      - _module: Opportunities
-                        id: b0701501-1fab-8ae7-3942-540da93f5017
-                        name: 360 Vacations - 228 Units
-                        date_modified: '2014-09-08T16:05:00+03:00'
-                        sales_status: New
-                    _acl:
-                      fields: {}
-                  - id: 95e17367-9b3d-0e26-22dc-512d0961fedf
-                    name: Florence Haddock
-                    date_modified: '2013-02-26T19:12:00+00:00'
-                    description: ''
-                    opportunities:
-                      - _module: Opportunities
-                        id: 9ce7c088-8ee4-7cd3-18f1-540da944d4c0
-                        name: 360 Vacations - 312 Units
-                        date_modified: '2014-09-08T16:05:00+03:00'
-                        sales_status: New
-                    _acl:
-                      fields: {}
+              schema:
+                type: object
+                properties:
+                  next_offset:
+                    type: integer
+                    description: offset cho lần gọi kế tiếp, giá trị là -1 nếu không còn bản ghi
+                    example: -1
+                  records:
+                    type: array
+                    description: danh sách các bản ghi kết quả.
+                    example:
+                      - id: fa300a0e-0ad1-b322-9601-512d0983c19a
+                        name: Nelson Inc
+                        date_modified: '2013-02-28T05:03:00+00:00'
+                        description: ''
+                        opportunities:
+                          - _module: Opportunities
+                            id: b0701501-1fab-8ae7-3942-540da93f5017
+                            name: 360 Vacations - 228 Units
+                            date_modified: '2014-09-08T16:05:00+03:00'
+                            sales_status: New
+                        _acl:
+                          fields: {}
+                      - id: 95e17367-9b3d-0e26-22dc-512d0961fedf
+                        name: Florence Haddock
+                        date_modified: '2013-02-26T19:12:00+00:00'
+                        description: ''
+                        opportunities:
+                          - _module: Opportunities
+                            id: 9ce7c088-8ee4-7cd3-18f1-540da944d4c0
+                            name: 360 Vacations - 312 Units
+                            date_modified: '2014-09-08T16:05:00+03:00'
+                            sales_status: New
+                        _acl:
+                          fields: {}
       security:
         - BearerAuth: []
   /{module}/filter/count:
