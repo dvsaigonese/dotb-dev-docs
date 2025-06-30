@@ -101,6 +101,7 @@ For production deployment, use the included Apache configuration files:
 ### Files Included:
 - **apache-http.conf**: HTTP (port 80) configuration with HTTPS redirect
 - **apache-https.conf**: HTTPS (port 443) configuration with proxy to container
+- **apache-security.conf**: Global security settings (ServerTokens, security headers)
 
 ### Setup Instructions:
 
@@ -109,6 +110,10 @@ For production deployment, use the included Apache configuration files:
 # Copy to Apache sites-available
 sudo cp apache-http.conf /etc/apache2/sites-available/developer.dotb.cloud.conf
 sudo cp apache-https.conf /etc/apache2/sites-available/developer.dotb.cloud-ssl.conf
+
+# Copy security configuration
+sudo cp apache-security.conf /etc/apache2/conf-available/dotb-security.conf
+sudo a2enconf dotb-security
 ```
 
 2. **Enable required Apache modules:**
