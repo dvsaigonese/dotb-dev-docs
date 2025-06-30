@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  dotb-api-docs:
+    build: .
+    ports:
+      - "8080:80"
+    container_name: dotb-api-documentation
+    restart: unless-stopped
+    networks:
+      - docs-network
+
+networks:
+  docs-network:
+    driver: bridge
