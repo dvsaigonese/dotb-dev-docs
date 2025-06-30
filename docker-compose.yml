@@ -2,11 +2,41 @@ version: '3'
 
 services:
   dotb-api-docs:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "8080:80"
+      - "8081:80"
     container_name: dotb-api-documentation
     restart: unless-stopped
+
+    # Resource limits for optimization
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.5'
+        reservations:
+          memory: 32M
+          cpus: '0.1'
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+
     networks:
       - docs-network
 

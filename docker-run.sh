@@ -6,7 +6,7 @@ echo "🚀 Starting build and run DOTB API Documentation..."
 docker-compose up --build -d
 
 echo "✅ Documentation has been started!"
-echo "🌐 Access at: http://localhost:8080"
+echo "🌐 Access at: http://localhost:8081"
 echo ""
 echo "📋 Useful commands:"
 echo "  - View logs: docker-compose logs -f"
